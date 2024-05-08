@@ -44,7 +44,7 @@ class LibriTTSCorpus(Dataset):
             "word_segmented_text": clean_text,
             "punc_text": punc_text,
             "basename": basename,
-            "lang_code": "eng-us"
+            "lang_code": "en-us"
             #    "phones": phones
         }
 

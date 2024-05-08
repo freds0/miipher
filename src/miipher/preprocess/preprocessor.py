@@ -122,11 +122,15 @@ class Preprocessor:
         # Instantiate and check DataLoader
         dataloader = DataLoader(self.dataset, batch_size=1, shuffle=True, num_workers=64)
         print(f"DataLoader initialized with {len(dataloader.dataset)} items.")
-
         for idx, data in enumerate(tqdm.tqdm(dataloader)):
             # TODO: remove this for real training
+<<<<<<< HEAD
             if idx > 100:
                 break
+=======
+            #if idx > 100:
+            #    break
+>>>>>>> 00eb3f0e85e6e39635d1acdc7f630a7f9f35e1f8
             basename = data["basename"][0]
             wav_path = data["wav_path"][0]
             word_segmented_text = data["word_segmented_text"][0]

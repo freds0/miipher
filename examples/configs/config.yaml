@@ -2,9 +2,19 @@ preprocess:
   preprocess_dataset:
     _target_: torch.utils.data.ConcatDataset
     datasets:
+<<<<<<< HEAD
       - 
         _target_: miipher.dataset.libritts.LibriTTSCorpus
         root: /home/fred/Projetos/DATASETS/LibriTTS_R/
+=======
+      # - 
+      #   _target_: miipher.dataset.jvs_corpus.JVSCorpus
+      #   root: /mnt/hdd/datasets/jvs_ver1/
+      - 
+        _target_: miipher.dataset.libritts.LibriTTSCorpus
+         root: /mnt/hdd/datasets/libritts-r/LibriTTS_R/  
+        #root: /home/christopher/Corpora/LibriTTS-R/
+>>>>>>> 00eb3f0e85e6e39635d1acdc7f630a7f9f35e1f8
   phoneme_tokenizer:
     _target_: transformers.AutoTokenizer.from_pretrained
     pretrained_model_name_or_path: "vinai/xphonebert-base"
@@ -42,25 +52,64 @@ preprocess:
         max: 30.0
         min: 5.0
       patterns:
+<<<<<<< HEAD
         - 
           - /home/fred/Projetos/DATASETS/TAU-urban-acoustic-scenes-2022-mobile-development/audio/
+=======
+        # -
+        #   - /mnt/hdd/datasets/slakh2100_flac_redux
+        #   - '**/mix.flac'
+        - 
+          # - /mnt/hdd/datasets/TAU_urban/audio/
+          - /data/hy17/noise/
+>>>>>>> 00eb3f0e85e6e39635d1acdc7f630a7f9f35e1f8
           - '**/*.wav'
+        # - 
+        #   # - /mnt/hdd/datasets/TAU_urban/audio/
+        #   - /data/hy17/noise/DNS
+        #   - '**/*.wav'
   train_tar_sink:
     _target_: webdataset.ShardWriter
+<<<<<<< HEAD
     pattern: "/home/fred/Projetos/miipher/miipher-train-%06d.tar.gz"
   val_tar_sink:
     _target_: webdataset.ShardWriter
     pattern: "/home/fred/Projetos/miipher/miipher-val-%06d.tar.gz"
   val_size: 10
+=======
+    pattern: "/mnt/hdd/miipher/miipher-train-%06d.tar.gz"
+    #pattern: "/data/hy17/miipher/miipher-train-%06d.tar.gz"
+  val_tar_sink:
+    _target_: webdataset.ShardWriter
+    pattern: "/mnt/hdd/miipher/miipher-val-%06d.tar.gz"
+    #pattern: "/data/hy17/miipher/miipher-val-%06d.tar.gz"
+  val_size: 6000
+>>>>>>> 00eb3f0e85e6e39635d1acdc7f630a7f9f35e1f8
   n_repeats: 4
 sample_rate: 22050
 
 data:
+<<<<<<< HEAD
   train_dataset_path: /home/fred/Projetos/miipher/miipher-train-{000000..0000}.tar.gz
   val_dataset_path: /home/fred/Projetos/miipher/miipher-val-{000000..000000}.tar.gz
   train_batch_size: 1
   val_batch_size: 1
   speech_ssl_processor:
+=======
+  train_dataset_path: /home/christopher/Corpora/LibriTTS-R/train_clean_100.tar.gz
+  val_dataset_path: /home/christopher/Corpora/LibriTTS-R/test_clean.tar.gz
+
+  # train_dataset_path: 
+  # val_dataset_path: 
+  train_batch_size: 80  # **** TODO(HAICI) ***
+  val_batch_size: 32
+  speech_ssl_processor: # **** TODO(HAICI) ***
+    # --- wavlm --- 
+    # processor: 
+    #   _target_: transformers.AutoFeatureExtractor.from_pretrained
+    #   pretrained_model_name_or_path: "microsoft/wavlm-large"
+    # # --- w2v-bert ---
+>>>>>>> 00eb3f0e85e6e39635d1acdc7f630a7f9f35e1f8
     processor:
       _target_: transformers.AutoFeatureExtractor.from_pretrained
       pretrained_model_name_or_path: "facebook/w2v-bert-2.0"
@@ -71,21 +120,35 @@ data:
     pretrained_model_name_or_path: "vinai/xphonebert-base"
 train:
   loggers:
-    - _target_: lightning.pytorch.loggers.WandbLogger
-      project: "miipher"
+    # - _target_: lightning.pytorch.loggers.WandbLogger
+    #   project: "miipher"
+    - _target_: lightning.pytorch.loggers.TensorBoardLogger
+      # save_dir: "../tb_runs/wavlm-df"
+      save_dir: "../tb_runs/w2v-bert"
+      # project: "miipher-w2v-bert" # **** TODO(HAICI) ***
   trainer:
     _target_: lightning.Trainer
     accelerator: "gpu"
-    devices: -1
+    devices: -1 # **** TODO(HAICI) ***
     check_val_every_n_epoch: 1
     max_epochs: 3300
 model:
-  ssl_models:
+  ssl_models: # **** TODO(HAICI) ***
+    # --- WavLM ---
+    # model:
+    #   _target_: transformers.AutoModel.from_pretrained
+    #   pretrained_model_name_or_path: "microsoft/wavlm-large"
+    # # --- Whisper ---
+    # model:
+    #   _target_: transformers.AutoModel.from_pretrained
+    #   pretrained_model_name_or_path: "openai/whisper-large-v2"
+    # # --- W2v-bert ---
     model:
       _target_: transformers.Wav2Vec2BertModel.from_pretrained
       pretrained_model_name_or_path: "facebook/w2v-bert-2.0"
     sr: 16_000
-    layer: 8
+    layer: 8  
+
   phoneme_model:
     _target_: transformers.AutoModel.from_pretrained
     pretrained_model_name_or_path: "vinai/xphonebert-base"
@@ -102,3 +165,4 @@ model:
 optimizers:
   _target_: torch.optim.AdamW
   lr: 2e-5
+
