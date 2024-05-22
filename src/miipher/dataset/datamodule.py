@@ -5,16 +5,20 @@ import webdataset as wds
 import torch
 import torchaudio
 import hydra
+from transformers import AutoFeatureExtractor
 
 
 class MiipherDataModule(LightningDataModule):
     def __init__(self, cfg) -> None:
         super().__init__()
+
         self.speech_ssl_processor = hydra.utils.instantiate(
             cfg.data.speech_ssl_processor.processor
         )
+
+        #self.speech_ssl_processor = processor = AutoFeatureExtractor.from_pretrained("facebook/w2v-bert-2.0")
         self.speech_ssl_sr = cfg.data.speech_ssl_processor.sr
-        self.phoneme_tokenizer = hydra.utils.instantiate(cfg.data.phoneme_tokenizer)
+        #self.phoneme_tokenizer = hydra.utils.instantiate(cfg.data.phoneme_tokenizer)
         self.cfg = cfg
 
     def setup(self, stage: str):
@@ -56,6 +60,16 @@ class MiipherDataModule(LightningDataModule):
             num_workers=8,
         )
 
+    def custom_padding(self, batch_texts):
+        # Find the maximum length of text in the batch
+        max_length = max(len(text) for text in batch_texts)
+        # Initialize a matrix to store the padded texts
+        padded_texts = torch.zeros((len(batch_texts), max_length), dtype=torch.long)
+        # Fill the matrix with the batch texts with padding
+        for i, text in enumerate(batch_texts):
+            padded_texts[i, :len(text)] = torch.tensor(text)
+        return padded_texts
+    
     @torch.no_grad()
     def collate_fn(self, batch):
         output = dict()
@@ -89,7 +103,10 @@ class MiipherDataModule(LightningDataModule):
             sampling_rate=16000,
             padding=True,
         )
-        output["phoneme_input_ids"] = self.phoneme_tokenizer(
-            [b["phoneme.txt"] for b in batch], return_tensors="pt", padding=True
-        )
+        #output["phoneme_input_ids"] = self.phoneme_tokenizer(
+        #    [b["phoneme.txt"] for b in batch], return_tensors="pt", padding=True
+        #)
+        batch_texts = [b["phoneme_input_ids.pth"] for b in batch]
+        output["phoneme_input_ids"] = self.custom_padding(batch_texts)
+                                                     
         return output

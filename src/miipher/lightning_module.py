@@ -10,14 +10,19 @@ from typing import List
 from lightning_vocoders.models.hifigan.xvector_lightning_module import HiFiGANXvectorLightningModule
 import torch
 import hydra
-
+from miipher.ml_pl_bert.model import MlPlBertModel
+#from transformers import Wav2Vec2BertModel
 
 class FeatureExtractor():
     def __init__(self,cfg) -> None:
         self.speech_ssl_model = hydra.utils.instantiate(cfg.model.ssl_models.model)
+        #self.speech_ssl_model = Wav2Vec2BertModel.from_pretrained("facebook/w2v-bert-2.0")
         self.speech_ssl_model.eval()
-        self.phoneme_model = hydra.utils.instantiate(cfg.model.phoneme_model)
-        self.phoneme_model.eval()
+        #self.phoneme_model = hydra.utils.instantiate(cfg.model.phoneme_model)
+        #self.phoneme_model.eval()
+        self.phoneme_model = MlPlBertModel()
+        #self.phoneme_model.eval()
+        self.phoneme_model.train()
         self.xvector_model = hydra.utils.instantiate(cfg.model.xvector_model)
         self.xvector_model.eval()
         self.cfg = cfg
@@ -28,12 +33,16 @@ class FeatureExtractor():
         wav_16k_lens = inputs["degraded_wav_16k_lengths"]
         feats = self.xvector_model.mods.compute_features(wav_16k)
         feats = self.xvector_model.mods.mean_var_norm(feats, wav_16k_lens)
-        xvector = self.xvector_model.mods.embedding_model(feats, wav_16k_lens).squeeze(
-            1
-        )
+        xvector = self.xvector_model.mods.embedding_model(feats, wav_16k_lens).squeeze(1)
+        '''
         phone_feature = self.phoneme_model(
             **inputs["phoneme_input_ids"]
         ).last_hidden_state
+        '''
+        phone_feature = self.phoneme_model(
+                               inputs["phoneme_input_ids"]
+                           )
+        
         if 'clean_ssl_input' in inputs.keys():
             clean_ssl_feature = self.speech_ssl_model(
                 **inputs["clean_ssl_input"], output_hidden_states=True
