@@ -8,6 +8,9 @@ preprocess:
       # - 
       #   _target_: miipher.dataset.jvs_corpus.JVSCorpus
       #   root: /mnt/hdd/datasets/jvs_ver1/
+      #- 
+      #  _target_: miipher.dataset.libritts.LibriTTSCorpus
+      #   root: /mnt/hdd/datasets/libritts-r/LibriTTS_R/  
   phoneme_tokenizer:
     _target_: transformers.AutoTokenizer.from_pretrained
     pretrained_model_name_or_path: "vinai/xphonebert-base"
@@ -39,7 +42,7 @@ preprocess:
         - 1.0
         - 0.7
         - 1.2
-    n_rirs: 1000
+    n_rirs: 10
     background_noise:
       snr:
         max: 30.0
@@ -99,17 +102,17 @@ train:
 model:
   ssl_models: # **** TODO(HAICI) ***
     # --- WavLM ---
-    # model:
-    #   _target_: transformers.AutoModel.from_pretrained
-    #   pretrained_model_name_or_path: "microsoft/wavlm-large"
+    model:
+      _target_: transformers.AutoModel.from_pretrained
+      pretrained_model_name_or_path: "microsoft/wavlm-large"
     # # --- Whisper ---
     # model:
     #   _target_: transformers.AutoModel.from_pretrained
     #   pretrained_model_name_or_path: "openai/whisper-large-v2"
     # # --- W2v-bert ---
-    model:
-      _target_: transformers.Wav2Vec2BertModel.from_pretrained
-      pretrained_model_name_or_path: "facebook/w2v-bert-2.0"
+    #model:
+      #_target_: transformers.Wav2Vec2BertModel.from_pretrained
+      #pretrained_model_name_or_path: "facebook/w2v-bert-2.0"
     sr: 16_000
     layer: 8  
 

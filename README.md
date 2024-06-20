@@ -1,5 +1,5 @@
 # miipher
-This repository proviedes unofficial implementation of speech restoration model Miipher.
+This repository provides an unofficial implementation of speech restoration model Miipher.
 Miipher is originally proposed by Koizumi et. al. [arxiv](https://arxiv.org/abs/2303.01664)
 Please note that the model provided in this repository doesn't represent the performance of the original model proposed by Koizumi et. al. as this implementation differs in many ways from the paper.
 
