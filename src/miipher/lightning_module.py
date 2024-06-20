@@ -10,22 +10,16 @@ from typing import List
 from lightning_vocoders.models.hifigan.xvector_lightning_module import HiFiGANXvectorLightningModule
 import torch
 import hydra
-from miipher.ml_pl_bert.model import MlPlBertModel
-#from transformers import Wav2Vec2BertModel
+from miipher.text_encoder.model import PhonemeLevelBertModel
 
 class FeatureExtractor():
-    def __init__(self,cfg) -> None:
-        self.speech_ssl_model = hydra.utils.instantiate(cfg.model.ssl_models.model)
-        #self.speech_ssl_model = Wav2Vec2BertModel.from_pretrained("facebook/w2v-bert-2.0")
-        self.speech_ssl_model.eval()
-        #self.phoneme_model = hydra.utils.instantiate(cfg.model.phoneme_model)
-        #self.phoneme_model.eval()
-        self.phoneme_model = MlPlBertModel()
-        #self.phoneme_model.eval()
-        self.phoneme_model.train()
-        self.xvector_model = hydra.utils.instantiate(cfg.model.xvector_model)
-        self.xvector_model.eval()
+    def __init__(self, cfg, device=None) -> None:
+        if device is None:
+            device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        self.speech_ssl_model = hydra.utils.instantiate(cfg.model.ssl_models.model).eval().to(device)
+        self.xvector_model = hydra.utils.instantiate(cfg.model.xvector_model)#.eval().to(device)
         self.cfg = cfg
+
 
     @torch.inference_mode()
     def __call__(self, inputs):
@@ -34,15 +28,7 @@ class FeatureExtractor():
         feats = self.xvector_model.mods.compute_features(wav_16k)
         feats = self.xvector_model.mods.mean_var_norm(feats, wav_16k_lens)
         xvector = self.xvector_model.mods.embedding_model(feats, wav_16k_lens).squeeze(1)
-        '''
-        phone_feature = self.phoneme_model(
-            **inputs["phoneme_input_ids"]
-        ).last_hidden_state
-        '''
-        phone_feature = self.phoneme_model(
-                               inputs["phoneme_input_ids"]
-                           )
-        
+
         if 'clean_ssl_input' in inputs.keys():
             clean_ssl_feature = self.speech_ssl_model(
                 **inputs["clean_ssl_input"], output_hidden_states=True
@@ -60,62 +46,72 @@ class FeatureExtractor():
             self.cfg.model.ssl_models.layer
         ]
 
-        return phone_feature, xvector, degraded_ssl_feature, clean_ssl_feature
+        return xvector, degraded_ssl_feature, clean_ssl_feature
+
 
     def to(self,device:torch.device):
         self.speech_ssl_model = self.speech_ssl_model.to(device)
-        self.phoneme_model = self.phoneme_model.to(device)
         self.xvector_model = self.xvector_model.to(device)
+
 
 class MiipherLightningModule(LightningModule):
     def __init__(self, cfg: DictConfig) -> None:
         super().__init__()
-
-        self.miipher = Miipher(**cfg.model.miipher)
+        self.miipher = Miipher(device=self.device, **cfg.model.miipher)
+        self.phoneme_model = PhonemeLevelBertModel()
         self.mse_loss = nn.MSELoss()
         self.mae_loss = nn.L1Loss()
         self.cfg = cfg
-        self.feature_extractor = FeatureExtractor(cfg)
+        self.feature_extractor = FeatureExtractor(cfg=self.cfg, device=self.device)
         # GANs
         self.save_hyperparameters()
 
+
     def on_fit_start(self):
+        self.phoneme_model.to(self.device)
         self.feature_extractor.to(self.device)
+
 
     def forward(self,phone_feature, speaker_feature, degraded_ssl_feature):
         cleaned_feature, intermediates = self.miipher.forward(
             phone_feature.clone(), speaker_feature.clone(), degraded_ssl_feature.clone()
         )
         return cleaned_feature, intermediates
-    def training_step(self, batch, batch_idx) -> STEP_OUTPUT:
-        (
-            phone_feature,
-            speaker_feature,
-            degraded_ssl_feature,
-            clean_ssl_feature,
-        ) = self.feature_extractor(batch)
+    
+
+    def training_step(self, batch, batch_idx) -> STEP_OUTPUT:     
+        (speaker_feature, degraded_ssl_feature, clean_ssl_feature) = self.feature_extractor(batch)
+
+        phone_feature = self.phoneme_model(
+            batch["phoneme_input_ids"]
+        )
 
         cleaned_feature, intermediates = self.miipher.forward(
             phone_feature.clone(), speaker_feature.clone(), degraded_ssl_feature.clone()
         )
+
         with torch.cuda.amp.autocast(enabled=False):
             loss = self.criterion(intermediates.float(), clean_ssl_feature.float(),log=True,stage='train')
+        
         self.log("train/loss", loss, batch_size=phone_feature.size(0),prog_bar=True)
+
         return loss
 
     def validation_step(self, batch, batch_idx) -> STEP_OUTPUT | None:
-        (
-            phone_feature,
-            speaker_feature,
-            degraded_ssl_feature,
-            clean_ssl_feature,
-        ) = self.feature_extractor(batch)
+        (speaker_feature, degraded_ssl_feature, clean_ssl_feature) = self.feature_extractor(batch)
+
+        phone_feature = self.phoneme_model(
+            batch["phoneme_input_ids"]
+        )        
+
         cleaned_feature, intermediates = self.miipher.forward(
             phone_feature, speaker_feature, degraded_ssl_feature
         )
+
         with torch.cuda.amp.autocast(enabled=False):
             loss = self.criterion(intermediates.float(), clean_ssl_feature.float(),log=True,stage='val')
         self.log("val/loss", loss, batch_size=phone_feature.size(0))
+
         if batch_idx < 10 and self.global_rank == 0 and self.local_rank==0:
             cleaned_wav = self.synthesis(cleaned_feature[0], batch["degraded_wav_16k"][0], batch["degraded_wav_16k_lengths"][0])
             self.log_audio(cleaned_wav, f"val/cleaned_wav/{batch_idx}", 22050)
@@ -123,6 +119,7 @@ class MiipherLightningModule(LightningModule):
             self.log_audio(input_wav, f"val/input_wav/{batch_idx}", 22050)
             clean_wav = self.synthesis(clean_ssl_feature[0], batch["degraded_wav_16k"][0], batch["degraded_wav_16k_lengths"][0])
             self.log_audio(clean_wav, f"val/target_wav/{batch_idx}", 22050)
+
         return loss
 
     def configure_optimizers(self):
@@ -145,15 +142,26 @@ class MiipherLightningModule(LightningModule):
                 self.log(f'{stage}/{idx}/spectoral_loss', spectoral_loss)
 
         return loss
+
+    def count_parameters(self) -> None:
+        total_params = sum(p.numel() for p in self.parameters() if p.requires_grad)
+        print(f"Total trainable parameters: {total_params}")
+
     @torch.inference_mode()
     def synthesis(self,features:torch.Tensor,wav16k,wav16k_lens):
-        vocoder = HiFiGANXvectorLightningModule.load_from_checkpoint("https://huggingface.co/Wataru/ssl-vocoder/resolve/main/wavlm-large-l8-xvector/wavlm-large-l8-xvector.ckpt",map_location='cpu')
+        vocoder = HiFiGANXvectorLightningModule.load_from_checkpoint(
+            "https://huggingface.co/Wataru/ssl-vocoder/resolve/main/wavlm-large-l8-xvector/wavlm-large-l8-xvector.ckpt",
+            map_location=self.device
+        )
         vocoder.eval()
         xvector_model = hydra.utils.instantiate(vocoder.cfg.data.xvector.model)
         xvector_model.eval()
         xvector = xvector_model.encode_batch(wav16k.unsqueeze(0).cpu()).squeeze(1)
         vocoder = vocoder.float()
-        return vocoder.generator_forward({"input_feature": features.unsqueeze(0).cpu().float(), "xvector": xvector.cpu().float()})[0].T
+        return vocoder.generator_forward(
+            {"input_feature": features.unsqueeze(0).to(self.device).float(), 
+             "xvector": xvector.to(self.device).float()
+            })[0].T
 
     def log_audio(self, audio, name, sampling_rate):
         for logger in self.loggers:

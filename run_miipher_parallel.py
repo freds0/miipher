@@ -5,17 +5,21 @@ import sys
 import logging
 from miipher.dataset.preprocess_for_infer import PreprocessForInfer
 from miipher.lightning_module import MiipherLightningModule
-from lightning_vocoders.models.hifigan.xvector_lightning_module import HiFiGANXvectorLightningModule
+from lightning_vocoders.models.hifigan.xvector_lightning_module import (
+    HiFiGANXvectorLightningModule,
+)
 import torch
 import torchaudio
 import hydra
 import tempfile
 import shutil
 import concurrent.futures
+import time
 
 # Setup logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s:%(message)s')
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s:%(message)s")
 logger = logging.getLogger(__name__)
+
 
 def initialize_models():
     """
@@ -27,14 +31,19 @@ def initialize_models():
     miipher_path = "miipher_v2.ckpt"
     vocoder_path = "vocoder_finetuned_v2.ckpt"
     logger.info("Loading models...")
-    miipher = MiipherLightningModule.load_from_checkpoint(miipher_path, map_location='cpu')
-    vocoder = HiFiGANXvectorLightningModule.load_from_checkpoint(vocoder_path, map_location='cpu')
+    miipher = MiipherLightningModule.load_from_checkpoint(
+        miipher_path, map_location="cpu"
+    )
+    vocoder = HiFiGANXvectorLightningModule.load_from_checkpoint(
+        vocoder_path, map_location="cpu"
+    )
     xvector_model = hydra.utils.instantiate(vocoder.cfg.data.xvector.model)
-    xvector_model = xvector_model.to('cpu')
+    xvector_model = xvector_model.to("cpu")
     preprocessor = PreprocessForInfer(miipher.cfg)
     preprocessor.cfg.preprocess.text2phone_model.is_cuda = False
     logger.info("Models loaded successfully.")
     return miipher, vocoder, xvector_model, preprocessor
+
 
 def find_transcript_path(wav_path):
     """
@@ -46,17 +55,30 @@ def find_transcript_path(wav_path):
     Returns:
         str: Path to the transcript file if found, otherwise None.
     """
-    base_path = wav_path.rsplit('.', 1)[0]  # Remove the file extension
+    base_path = wav_path.rsplit(".", 1)[0]  # Remove the file extension
     possible_paths = [
-        base_path + '.txt',  # Direct match
-        base_path.replace(os.path.basename(base_path), 'whisper_' + os.path.basename(base_path)) + '.txt',  # Prefixed
+        base_path + ".txt",  # Direct match
+        base_path.replace(
+            os.path.basename(base_path), "whisper_" + os.path.basename(base_path)
+        )
+        + ".txt",  # Prefixed
     ]
     for path in possible_paths:
         if os.path.exists(path):
             return path
     return None
 
-def process_file(wav_path, transcript_path, lang_code, output_dir, miipher, vocoder, xvector_model, preprocessor):
+
+def process_file(
+    wav_path,
+    transcript_path,
+    lang_code,
+    output_dir,
+    miipher,
+    vocoder,
+    xvector_model,
+    preprocessor,
+):
     """
     Process a single wav file, performing speech enhancement and saving the cleaned output.
 
@@ -78,27 +100,47 @@ def process_file(wav_path, transcript_path, lang_code, output_dir, miipher, voco
         return None
 
     try:
-        with open(transcript_path, 'r') as f:
+        with open(transcript_path, "r") as f:
             transcript = f.read().strip()
-        
+
         logger.info(f"Processing file: {wav_path}")
         wav, sr = torchaudio.load(wav_path)
         wav = wav[0].unsqueeze(0)
         batch = preprocessor.process(
-            'test',
+            "test",
             (torch.tensor(wav), sr),
             word_segmented_text=transcript,
-            lang_code=lang_code
+            lang_code=lang_code,
         )
 
-        phone_feature, speaker_feature, degraded_ssl_feature, _ = miipher.feature_extractor(batch)
-        cleaned_ssl_feature, _ = miipher(phone_feature.detach(), speaker_feature.detach(), degraded_ssl_feature.detach())
-        vocoder_xvector = xvector_model.encode_batch(batch['degraded_wav_16k'].view(1, -1).cpu().detach()).squeeze(1)
-        cleaned_wav = vocoder.generator_forward({"input_feature": cleaned_ssl_feature.detach(), "xvector": vocoder_xvector.detach()})[0].T
-        
-        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmpfile:
-            torchaudio.save(tmpfile.name, cleaned_wav.view(1, -1), sample_rate=22050, format='wav')
-            output_file_name = os.path.basename(wav_path).replace('.wav', '_cleaned.wav')
+        (
+            phone_feature,
+            speaker_feature,
+            degraded_ssl_feature,
+            _,
+        ) = miipher.feature_extractor(batch)
+        cleaned_ssl_feature, _ = miipher(
+            phone_feature.detach(),
+            speaker_feature.detach(),
+            degraded_ssl_feature.detach(),
+        )
+        vocoder_xvector = xvector_model.encode_batch(
+            batch["degraded_wav_16k"].view(1, -1).cpu().detach()
+        ).squeeze(1)
+        cleaned_wav = vocoder.generator_forward(
+            {
+                "input_feature": cleaned_ssl_feature.detach(),
+                "xvector": vocoder_xvector.detach(),
+            }
+        )[0].T
+
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmpfile:
+            torchaudio.save(
+                tmpfile.name, cleaned_wav.view(1, -1), sample_rate=22050, format="wav"
+            )
+            output_file_name = os.path.basename(wav_path).replace(
+                ".wav", "_cleaned.wav"
+            )
             new_path = os.path.join(output_dir, output_file_name)
             shutil.move(tmpfile.name, new_path)
             logger.info(f"Processed and saved cleaned audio to {new_path}")
@@ -106,6 +148,7 @@ def process_file(wav_path, transcript_path, lang_code, output_dir, miipher, voco
     except Exception as e:
         logger.error(f"Error processing {wav_path}: {e}")
         return None
+
 
 def process_list(wav_list_path, lang_code, models, log_file_path):
     """
@@ -121,7 +164,7 @@ def process_list(wav_list_path, lang_code, models, log_file_path):
         list: List of paths to successfully processed and cleaned wav files.
     """
     miipher, vocoder, xvector_model, preprocessor = models
-    with open(wav_list_path, 'r') as f:
+    with open(wav_list_path, "r") as f:
         files = [line.strip() for line in f]
     valid_files = []
     invalid_files = []
@@ -132,22 +175,36 @@ def process_list(wav_list_path, lang_code, models, log_file_path):
             valid_files.append((file, transcript_path))
         else:
             invalid_files.append(file)
-    
+
     log_missing_transcripts(invalid_files, log_file_path)
-    
+
     if not valid_files:
         logger.info("No valid audio and transcript pairs found.")
         return []
 
     output_files = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-        futures = [executor.submit(process_file, wav_path, transcript_path, lang_code, os.path.dirname(wav_path), miipher, vocoder, xvector_model, preprocessor) for wav_path, transcript_path in valid_files]
+        futures = [
+            executor.submit(
+                process_file,
+                wav_path,
+                transcript_path,
+                lang_code,
+                os.path.dirname(wav_path),
+                miipher,
+                vocoder,
+                xvector_model,
+                preprocessor,
+            )
+            for wav_path, transcript_path in valid_files
+        ]
         for future in concurrent.futures.as_completed(futures):
             result = future.result()
             if result:
                 output_files.append(result)
-    
+
     return output_files
+
 
 def log_missing_transcripts(files, log_file_path):
     """
@@ -157,17 +214,28 @@ def log_missing_transcripts(files, log_file_path):
         files (list): List of file paths for which transcripts were not found.
         log_file_path (str): Path to the log file.
     """
-    with open(log_file_path, 'w') as log_file:
+    with open(log_file_path, "w") as log_file:
         for file in files:
             log_file.write(f"Transcript not found for {file}\n")
+
 
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description='Process audio files.')
-    parser.add_argument('--wav_list', type=str, required=True, help='Text file containing paths to wav files and their corresponding transcriptions')
-    parser.add_argument('--lang_code', type=str, default='eng-us', help='Language code, e.g., "eng-us" or "jpn"')
-    
+    parser = argparse.ArgumentParser(description="Process audio files.")
+    parser.add_argument(
+        "--wav_list",
+        type=str,
+        required=True,
+        help="Text file containing paths to wav files and their corresponding transcriptions",
+    )
+    parser.add_argument(
+        "--lang_code",
+        type=str,
+        default="eng-us",
+        help='Language code, e.g., "eng-us" or "jpn"',
+    )
+
     args = parser.parse_args()
 
     # Initialize models
@@ -175,4 +243,8 @@ if __name__ == "__main__":
     log_file_path = "transcript_not_found.log"
 
     # Process the list of files
+    start_time = time.time()
     process_list(args.wav_list, args.lang_code, models, log_file_path)
+    end_time = time.time()
+    duration = end_time - start_time
+    print("duration: ", duration)

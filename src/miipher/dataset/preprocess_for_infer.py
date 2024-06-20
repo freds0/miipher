@@ -4,7 +4,7 @@ import torchaudio
 from torch.nn.utils.rnn import pad_sequence
 
 class PreprocessForInfer(torch.nn.Module):
-    def __init__(self,cfg):
+    def __init__(self, cfg):
         super().__init__()
         self.phoneme_tokenizer = hydra.utils.instantiate(
             cfg.preprocess.phoneme_tokenizer
@@ -20,15 +20,15 @@ class PreprocessForInfer(torch.nn.Module):
     def get_phonemes_input_ids(self, word_segmented_text, lang_code):
         if lang_code not in self.text2phone_dict.keys():
             self.text2phone_dict[lang_code] = hydra.utils.instantiate(
-                self.cfg.preprocess.text2phone_model, language=lang_code, is_cuda=False
+                self.cfg.preprocess.text2phone_model, language=lang_code, is_cuda=self.cfg.preprocess.text2phone_model.is_cuda
             )
         input_phonemes = self.text2phone_dict[lang_code].infer_sentence(
             word_segmented_text
         )
         input_ids = self.phoneme_tokenizer(input_phonemes, return_tensors="pt")
         return input_ids, input_phonemes
-    def process(self,basename, degraded_audio,word_segmented_text=None,lang_code=None, phoneme_text=None):
-        degraded_audio,sr = degraded_audio
+    def process(self, basename, degraded_audio,word_segmented_text=None,lang_code=None, phoneme_text=None):
+        degraded_audio, sr = degraded_audio
         output = dict()
 
         if word_segmented_text != None and  lang_code != None:

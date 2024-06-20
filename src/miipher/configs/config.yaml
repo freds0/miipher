@@ -2,13 +2,12 @@ preprocess:
   preprocess_dataset:
     _target_: torch.utils.data.ConcatDataset
     datasets:
+      - 
+        _target_: miipher.dataset.libritts.LibriTTSCorpus
+        root: /mnt/DATASETS/LibriTTS_R_samples/train-clean-100/
       # - 
       #   _target_: miipher.dataset.jvs_corpus.JVSCorpus
       #   root: /mnt/hdd/datasets/jvs_ver1/
-      - 
-        _target_: miipher.dataset.libritts.LibriTTSCorpus
-         root: /mnt/hdd/datasets/libritts-r/LibriTTS_R/  
-        #root: /home/christopher/Corpora/LibriTTS-R/
   phoneme_tokenizer:
     _target_: transformers.AutoTokenizer.from_pretrained
     pretrained_model_name_or_path: "vinai/xphonebert-base"
@@ -17,23 +16,6 @@ preprocess:
     is_cuda: True
   degration:
     format_encoding_pairs:
-      - format: mp3
-        compression: 16
-      - format: mp3
-        compression: 32
-      - format: mp3
-        compression: 64
-      - format: mp3
-        compression: 128
-      - format: vorbis
-        compression: -1
-      - format: vorbis
-        compression: 0
-      - format: vorbis
-        compression: 1
-      - format: wav
-        encoding: ALAW
-        bits_per_sample: 8
     reverb_conditions:
       p: 0.5
       reverbation_times:
@@ -63,47 +45,39 @@ preprocess:
         max: 30.0
         min: 5.0
       patterns:
-        # -
-        #   - /mnt/hdd/datasets/slakh2100_flac_redux
-        #   - '**/mix.flac'
         - 
-          # - /mnt/hdd/datasets/TAU_urban/audio/
-          - /data/hy17/noise/
-          - '**/*.wav'
+          - /mnt/DATASETS/TAU_urban/audio/
+          - '*.wav'
         # - 
         #   # - /mnt/hdd/datasets/TAU_urban/audio/
         #   - /data/hy17/noise/DNS
         #   - '**/*.wav'
   train_tar_sink:
     _target_: webdataset.ShardWriter
-    pattern: "/mnt/hdd/miipher/miipher-train-%06d.tar.gz"
-    #pattern: "/data/hy17/miipher/miipher-train-%06d.tar.gz"
+    pattern: "/mnt/miipher/miipher-train-%06d.tar.gz"
   val_tar_sink:
     _target_: webdataset.ShardWriter
-    pattern: "/mnt/hdd/miipher/miipher-val-%06d.tar.gz"
-    #pattern: "/data/hy17/miipher/miipher-val-%06d.tar.gz"
-  val_size: 6000
+    pattern: "/mnt/miipher/miipher-val-%06d.tar.gz"
+  val_size: 10
   n_repeats: 4
 sample_rate: 22050
 
 data:
-  train_dataset_path: /home/christopher/Corpora/LibriTTS-R/train_clean_100.tar.gz
-  val_dataset_path: /home/christopher/Corpora/LibriTTS-R/test_clean.tar.gz
-
-  # train_dataset_path: 
-  # val_dataset_path: 
-  train_batch_size: 80  # **** TODO(HAICI) ***
-  val_batch_size: 32
-  speech_ssl_processor: # **** TODO(HAICI) ***
+  train_dataset_path: /mnt/miipher/miipher-train-{000000..0000}.tar.gz
+  val_dataset_path: /mnt/miipher/miipher-val-{000000..000000}.tar.gz
+  train_batch_size: 1
+  val_batch_size: 1
+  speech_ssl_processor:
     # --- wavlm --- 
-    # processor: 
-    #   _target_: transformers.AutoFeatureExtractor.from_pretrained
-    #   pretrained_model_name_or_path: "microsoft/wavlm-large"
-    # # --- w2v-bert ---
-    processor:
+    processor: 
       _target_: transformers.AutoFeatureExtractor.from_pretrained
-      pretrained_model_name_or_path: "facebook/w2v-bert-2.0"
+      pretrained_model_name_or_path: "microsoft/wavlm-large"
     sr: 16_000
+     # --- w2v-bert ---
+    #processor:
+    #  _target_: transformers.AutoFeatureExtractor.from_pretrained
+    #  pretrained_model_name_or_path: "facebook/w2v-bert-2.0"
+    #sr: 16_000
   phoneme_padding_idx: 1
   phoneme_tokenizer:
     _target_: transformers.AutoTokenizer.from_pretrained
@@ -113,8 +87,8 @@ train:
     # - _target_: lightning.pytorch.loggers.WandbLogger
     #   project: "miipher"
     - _target_: lightning.pytorch.loggers.TensorBoardLogger
-      # save_dir: "../tb_runs/wavlm-df"
-      save_dir: "../tb_runs/w2v-bert"
+      save_dir: "./tb_runs/wavlm-bert"
+      #save_dir: "./tb_runs/w2v-bert"
       # project: "miipher-w2v-bert" # **** TODO(HAICI) ***
   trainer:
     _target_: lightning.Trainer

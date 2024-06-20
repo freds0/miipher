@@ -12,14 +12,12 @@ from miipher.preprocess.noiseAugmentation import DegrationApplier
 import io
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from miipher.ml_pl_bert.phonemize_processor import PhonemizeProcessor
-#from miipher.ml_pl_bert.text_utils import TextCleaner
+from miipher.text_encoder.phonemize_processor import PhonemizeProcessor
 
 class Preprocessor:
     """
     Preprocess dataset
     """
-
     def __init__(self, cfg: DictConfig):
         """
         Args:
@@ -28,13 +26,10 @@ class Preprocessor:
         self.cfg = cfg
         self.dataset = hydra.utils.instantiate(cfg.preprocess.preprocess_dataset)
         self.sampling_rate = self.cfg.sample_rate
-        #self.phoneme_tokenizer = hydra.utils.instantiate(
-        #    cfg.preprocess.phoneme_tokenizer
-        #)
-        #self.text_cleaner = TextCleaner() 
         self.degration_model = DegrationApplier(cfg.preprocess.degration)
         self.text2phone_dict = dict()
         self.n_repeats = cfg.preprocess.n_repeats
+
 
     @torch.inference_mode()
     def process_utterance(
@@ -48,9 +43,7 @@ class Preprocessor:
 
         waveform = torchaudio.functional.resample(
             orig_waveform, sample_rate, new_freq=self.sampling_rate
-        )[
-            0
-        ]  # remove channel dimension only support mono
+        )[0]  # remove channel dimension only support mono
 
         with open(audio_file_path, mode="rb") as f:
             wav_bytes = f.read()
@@ -86,27 +79,20 @@ class Preprocessor:
             samples.append(sample)
         return samples
 
+
     def apply_noise(self, waveform):
         waveform = self.degration_model.process(waveform, self.sampling_rate)
         return waveform
 
+
     @torch.inference_mode()
     def get_phonemes_input_ids(self, word_segmented_text, lang_code):
         if lang_code not in self.text2phone_dict.keys():
-            #self.text2phone_dict[lang_code] = hydra.utils.instantiate(
-            #    self.cfg.preprocess.text2phone_model, language=lang_code
-            #)
             self.text2phone_dict[lang_code] = PhonemizeProcessor(language=lang_code)
-        
-        #input_phonemes = self.text2phone_dict[lang_code].infer_sentence(
-        #    word_segmented_text
-        #)
-        #input_ids = self.phoneme_tokenizer(input_phonemes, return_tensors="pt")
-        input_ids, input_phonemes = self.text2phone_dict[lang_code](word_segmented_text)
-        #input_phonemes = ''.join(phonemes)
-        #input_ids = self.text_cleaner(input_phonemes)
 
+        input_ids, input_phonemes = self.text2phone_dict[lang_code](word_segmented_text)
         return input_ids, input_phonemes
+    
 
     def build_from_path(self):
         # Check the directory for storing processed files
@@ -123,14 +109,6 @@ class Preprocessor:
         dataloader = DataLoader(self.dataset, batch_size=1, shuffle=True, num_workers=64)
         print(f"DataLoader initialized with {len(dataloader.dataset)} items.")
         for idx, data in enumerate(tqdm.tqdm(dataloader)):
-            # TODO: remove this for real training
-<<<<<<< HEAD
-            if idx > 100:
-                break
-=======
-            #if idx > 100:
-            #    break
->>>>>>> 00eb3f0e85e6e39635d1acdc7f630a7f9f35e1f8
             basename = data["basename"][0]
             wav_path = data["wav_path"][0]
             word_segmented_text = data["word_segmented_text"][0]
@@ -164,7 +142,7 @@ from omegaconf import DictConfig
 from lightning.pytorch import seed_everything
 
 
-@hydra.main(version_base="1.3", config_name="config", config_path="/home/fred/Projetos/tmp/miipher/examples/configs/")
+@hydra.main(version_base="1.3", config_name="config", config_path="/mnt/miipher/examples/configs/")
 def main(cfg: DictConfig):
     seed_everything(1234)
     preprocssor = Preprocessor(cfg=cfg)
