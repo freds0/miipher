@@ -12,7 +12,8 @@ from miipher.preprocess.noiseAugmentation import DegrationApplier
 import io
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from miipher.text_encoder.phonemize_processor import PhonemizeProcessor
+from miipher.ml_pl_bert.phonemize_processor import PhonemizeProcessor
+#from miipher.ml_pl_bert.text_utils import TextCleaner
 
 class Preprocessor:
     """
@@ -26,6 +27,10 @@ class Preprocessor:
         self.cfg = cfg
         self.dataset = hydra.utils.instantiate(cfg.preprocess.preprocess_dataset)
         self.sampling_rate = self.cfg.sample_rate
+        #self.phoneme_tokenizer = hydra.utils.instantiate(
+        #    cfg.preprocess.phoneme_tokenizer
+        #)
+        #self.text_cleaner = TextCleaner() 
         self.degration_model = DegrationApplier(cfg.preprocess.degration)
         self.text2phone_dict = dict()
         self.n_repeats = cfg.preprocess.n_repeats
@@ -88,9 +93,19 @@ class Preprocessor:
     @torch.inference_mode()
     def get_phonemes_input_ids(self, word_segmented_text, lang_code):
         if lang_code not in self.text2phone_dict.keys():
+            #self.text2phone_dict[lang_code] = hydra.utils.instantiate(
+            #    self.cfg.preprocess.text2phone_model, language=lang_code
+            #)
             self.text2phone_dict[lang_code] = PhonemizeProcessor(language=lang_code)
-
+        
+        #input_phonemes = self.text2phone_dict[lang_code].infer_sentence(
+        #    word_segmented_text
+        #)
+        #input_ids = self.phoneme_tokenizer(input_phonemes, return_tensors="pt")
         input_ids, input_phonemes = self.text2phone_dict[lang_code](word_segmented_text)
+        #input_phonemes = ''.join(phonemes)
+        #input_ids = self.text_cleaner(input_phonemes)
+
         return input_ids, input_phonemes
     
 
@@ -109,6 +124,9 @@ class Preprocessor:
         dataloader = DataLoader(self.dataset, batch_size=1, shuffle=True, num_workers=64)
         print(f"DataLoader initialized with {len(dataloader.dataset)} items.")
         for idx, data in enumerate(tqdm.tqdm(dataloader)):
+            # TODO: remove this for real training
+            #if idx > 100:
+            #    break
             basename = data["basename"][0]
             wav_path = data["wav_path"][0]
             word_segmented_text = data["word_segmented_text"][0]

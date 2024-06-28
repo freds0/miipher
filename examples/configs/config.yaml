@@ -11,6 +11,15 @@ preprocess:
       #- 
       #  _target_: miipher.dataset.libritts.LibriTTSCorpus
       #   root: /mnt/hdd/datasets/libritts-r/LibriTTS_R/  
+
+      # - 
+      #   _target_: miipher.dataset.jvs_corpus.JVSCorpus
+      #   root: /mnt/hdd/datasets/jvs_ver1/
+      - 
+        _target_: miipher.dataset.libritts.LibriTTSCorpus
+         root: /mnt/hdd/datasets/libritts-r/LibriTTS_R/  
+        #root: /home/christopher/Corpora/LibriTTS-R/
+
   phoneme_tokenizer:
     _target_: transformers.AutoTokenizer.from_pretrained
     pretrained_model_name_or_path: "vinai/xphonebert-base"
@@ -51,6 +60,13 @@ preprocess:
         - 
           - /mnt/DATASETS/TAU_urban/audio/
           - '*.wav'
+        # -
+        #   - /mnt/hdd/datasets/slakh2100_flac_redux
+        #   - '**/mix.flac'
+        - 
+          # - /mnt/hdd/datasets/TAU_urban/audio/
+          - /data/hy17/noise/
+          - '**/*.wav'
         # - 
         #   # - /mnt/hdd/datasets/TAU_urban/audio/
         #   - /data/hy17/noise/DNS
@@ -62,6 +78,13 @@ preprocess:
     _target_: webdataset.ShardWriter
     pattern: "/mnt/miipher/miipher-val-%06d.tar.gz"
   val_size: 10
+    pattern: "/mnt/hdd/miipher/miipher-train-%06d.tar.gz"
+    #pattern: "/data/hy17/miipher/miipher-train-%06d.tar.gz"
+  val_tar_sink:
+    _target_: webdataset.ShardWriter
+    pattern: "/mnt/hdd/miipher/miipher-val-%06d.tar.gz"
+    #pattern: "/data/hy17/miipher/miipher-val-%06d.tar.gz"
+  val_size: 6000
   n_repeats: 4
 sample_rate: 22050
 
@@ -73,6 +96,21 @@ data:
   speech_ssl_processor:
     # --- wavlm --- 
     processor: 
+  train_dataset_path: /home/christopher/Corpora/LibriTTS-R/train_clean_100.tar.gz
+  val_dataset_path: /home/christopher/Corpora/LibriTTS-R/test_clean.tar.gz
+
+  # train_dataset_path: 
+  # val_dataset_path: 
+  train_batch_size: 80  # **** TODO(HAICI) ***
+  val_batch_size: 32
+  speech_ssl_processor: # **** TODO(HAICI) ***
+    # --- wavlm --- 
+    # processor: 
+    #   _target_: transformers.AutoFeatureExtractor.from_pretrained
+    #   pretrained_model_name_or_path: "microsoft/wavlm-large"
+    # # --- w2v-bert ---
+
+    processor:
       _target_: transformers.AutoFeatureExtractor.from_pretrained
       pretrained_model_name_or_path: "microsoft/wavlm-large"
     sr: 16_000
