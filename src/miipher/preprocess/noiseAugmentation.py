@@ -103,9 +103,18 @@ class DegrationApplier:
         noise_path = random.choice(self.noise_audio_paths)
         print(f"Applying noise from: {noise_path}") 
         noise, noise_sr = torchaudio.load(noise_path)
+
+        # Checks if the file is empty
+        if noise.numel() == 0:
+            noise_path = random.choice(self.noise_audio_paths)
+            noise, noise_sr = torchaudio.load(noise_path)
+
         noise /= noise.norm(p=2)
+        
         if noise.size(0) > 1:
-            noise = noise[0].unsqueeze(0)
+            # Convert stereo to mono
+            noise = torch.mean(noise, dim=0).unsqueeze(0)
+
         noise = torchaudio.functional.resample(noise, noise_sr, sample_rate)
         if not noise.size(1) < waveform.size(1):
             start_idx = random.randint(0, noise.size(1) - waveform.size(1))
