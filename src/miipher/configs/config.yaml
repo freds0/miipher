@@ -66,7 +66,7 @@ preprocess:
 sample_rate: 22050
 
 data:
-  train_dataset_path: /mnt/miipher/miipher-train-{000000..0000}.tar.gz
+  train_dataset_path: /mnt/miipher/miipher-train-{000000..000000}.tar.gz
   val_dataset_path: /mnt/miipher/miipher-val-{000000..000000}.tar.gz
   train_batch_size: 1
   val_batch_size: 1

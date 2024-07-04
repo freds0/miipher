@@ -12,8 +12,7 @@ from miipher.preprocess.noiseAugmentation import DegrationApplier
 import io
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from miipher.ml_pl_bert.phonemize_processor import PhonemizeProcessor
-#from miipher.ml_pl_bert.text_utils import TextCleaner
+from miipher.text_encoder.phonemize_processor import PhonemizeProcessor
 
 class Preprocessor:
     """
@@ -27,10 +26,6 @@ class Preprocessor:
         self.cfg = cfg
         self.dataset = hydra.utils.instantiate(cfg.preprocess.preprocess_dataset)
         self.sampling_rate = self.cfg.sample_rate
-        #self.phoneme_tokenizer = hydra.utils.instantiate(
-        #    cfg.preprocess.phoneme_tokenizer
-        #)
-        #self.text_cleaner = TextCleaner() 
         self.degration_model = DegrationApplier(cfg.preprocess.degration)
         self.text2phone_dict = dict()
         self.n_repeats = cfg.preprocess.n_repeats
@@ -44,6 +39,8 @@ class Preprocessor:
         word_segmented_text: str,
         lang_code: str,
     ):
+        print(f"Processing {audio_file_path}...")        
+
         orig_waveform, sample_rate = torchaudio.load(audio_file_path)
 
         waveform = torchaudio.functional.resample(
@@ -57,7 +54,7 @@ class Preprocessor:
             word_segmented_text, lang_code
         )
         if len(input_ids) > 512:
-            print(f"Error with file {audio_file_path}. Ignoring file...")
+            print(f"Error with file {audio_file_path}. Lenght bigger than 512. Ignoring file...")
             return False
 
         samples = []
@@ -93,19 +90,9 @@ class Preprocessor:
     @torch.inference_mode()
     def get_phonemes_input_ids(self, word_segmented_text, lang_code):
         if lang_code not in self.text2phone_dict.keys():
-            #self.text2phone_dict[lang_code] = hydra.utils.instantiate(
-            #    self.cfg.preprocess.text2phone_model, language=lang_code
-            #)
             self.text2phone_dict[lang_code] = PhonemizeProcessor(language=lang_code)
-        
-        #input_phonemes = self.text2phone_dict[lang_code].infer_sentence(
-        #    word_segmented_text
-        #)
-        #input_ids = self.phoneme_tokenizer(input_phonemes, return_tensors="pt")
-        input_ids, input_phonemes = self.text2phone_dict[lang_code](word_segmented_text)
-        #input_phonemes = ''.join(phonemes)
-        #input_ids = self.text_cleaner(input_phonemes)
 
+        input_ids, input_phonemes = self.text2phone_dict[lang_code](word_segmented_text)
         return input_ids, input_phonemes
     
 
@@ -124,9 +111,6 @@ class Preprocessor:
         dataloader = DataLoader(self.dataset, batch_size=1, shuffle=True, num_workers=64)
         print(f"DataLoader initialized with {len(dataloader.dataset)} items.")
         for idx, data in enumerate(tqdm.tqdm(dataloader)):
-            # TODO: remove this for real training
-            #if idx > 100:
-            #    break
             basename = data["basename"][0]
             wav_path = data["wav_path"][0]
             word_segmented_text = data["word_segmented_text"][0]
@@ -138,8 +122,9 @@ class Preprocessor:
             # Process utterance
             result = self.process_utterance(basename, wav_path, word_segmented_text, lang_code)
             if not result:
+                print(f"Error processing file {wav_path}. Ignoring...")
                 continue
-            print(f"Generated {len(result)} samples for {basename}.")
+            print(f"Generated {len(result)} samples for {basename}...")
 
             # Determine whether to use training or validation sink
             sink = train_sink if idx >= self.cfg.preprocess.val_size else val_sink
