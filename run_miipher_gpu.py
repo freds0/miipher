@@ -139,16 +139,12 @@ def process_file(
 
         batch = to_cuda(batch)
 
-        (
-            phone_feature,
-            speaker_feature,
-            degraded_ssl_feature,
-            _,
-        ) = miipher.feature_extractor(batch)
+        speaker_feature, degraded_ssl_feature, _ = miipher.feature_extractor(batch)
+        phone_feature = miipher.phoneme_model(batch["phoneme_input_ids"])
         cleaned_ssl_feature, _ = miipher(
-            phone_feature.detach(),
-            speaker_feature.detach(),
-            degraded_ssl_feature.detach(),
+            phone_feature.detach().to("cuda"),
+            speaker_feature.detach().to("cuda"),
+            degraded_ssl_feature.detach().to("cuda"),
         )
         vocoder_xvector = xvector_model.encode_batch(
             batch["degraded_wav_16k"].view(1, -1).detach()

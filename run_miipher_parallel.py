@@ -113,12 +113,8 @@ def process_file(
             lang_code=lang_code,
         )
 
-        (
-            phone_feature,
-            speaker_feature,
-            degraded_ssl_feature,
-            _,
-        ) = miipher.feature_extractor(batch)
+        speaker_feature, degraded_ssl_feature, _ = miipher.feature_extractor(batch)
+        phone_feature = miipher.phoneme_model(batch["phoneme_input_ids"])
         cleaned_ssl_feature, _ = miipher(
             phone_feature.detach(),
             speaker_feature.detach(),

@@ -58,7 +58,7 @@ class MiipherLightningModule(LightningModule):
     def __init__(self, cfg: DictConfig) -> None:
         super().__init__()
         self.miipher = Miipher(device=self.device, **cfg.model.miipher)
-        self.phoneme_model = PhonemeLevelBertModel()
+        self.phoneme_model = PhonemeLevelBertModel().to(self.device)
         self.mse_loss = nn.MSELoss()
         self.mae_loss = nn.L1Loss()
         self.cfg = cfg

@@ -64,12 +64,8 @@ def process_file(wav_path, transcript, lang_code, output_dir):
         lang_code=lang_code
     )
 
-    (
-        phone_feature,
-        speaker_feature,
-        degraded_ssl_feature,
-        _,
-    ) = miipher.feature_extractor(batch)
+    speaker_feature, degraded_ssl_feature, _ = miipher.feature_extractor(batch)
+    phone_feature = miipher.phoneme_model(batch["phoneme_input_ids"])
     cleaned_ssl_feature, _ = miipher(phone_feature, speaker_feature, degraded_ssl_feature)
     vocoder_xvector = xvector_model.encode_batch(batch['degraded_wav_16k'].view(1, -1).cpu()).squeeze(1)
     cleaned_wav = vocoder.generator_forward({"input_feature": cleaned_ssl_feature, "xvector": vocoder_xvector})[0].T
